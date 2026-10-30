@@ -1,0 +1,30 @@
+# Terraform working folder: downloaded providers + backend pointer (rebuilt by `terraform init`)
+.terraform/
+
+# State + backups. Ours lives outside the repo; this is a safety net.
+*.tfstate
+*.tfstate.*
+
+# Saved plan files (can contain sensitive values)
+*.tfplan
+tfplan
+
+# Real variable values (keep terraform.tfvars.example)
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Local override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keys and crash logs
+*.pem
+*.key
+crash.log
+crash.*.log
+
+# macOS
+.DS_Store

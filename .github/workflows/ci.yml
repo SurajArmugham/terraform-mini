@@ -1,0 +1,73 @@
+# -----------------------------------------------------------------------------
+# CI: check the Terraform code and show what WOULD change.
+# Never creates, changes or deletes anything in AWS.
+# -----------------------------------------------------------------------------
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {} # adds a "Run workflow" button, handy for testing the runner
+
+# ci and cd share ONE state file, so only one Terraform run at a time.
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true" # trims "what to do next" hints from the output
+  TF_INPUT: "false"        # never wait for keyboard input
+
+defaults:
+  run:
+    shell: bash # bash -e -o pipefail: any failing command fails the step
+
+jobs:
+  plan:
+    # The self-hosted runner on the laptop: it has terraform, ~/.aws and the state file.
+    runs-on: [self-hosted, macOS]
+    # Skip pull requests from forks: strangers' code must never run on the laptop.
+    # The repo setting "Require approval for all external contributors" is the real
+    # protection, because a fork could edit this file.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The runner service may not load your shell profile, so add Homebrew's bin.
+      - name: Add Homebrew to PATH
+        run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: |
+          terraform -version
+          aws --version
+
+      # Fails (instead of fixing) if any .tf file is not in standard format.
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      # Reads backend.tf → the state file on this laptop; downloads providers.
+      - name: Init
+        run: terraform init
+
+      - name: Validate
+        run: terraform validate
+
+      # Dry run. Also copied to the run's Summary page for easy reading.
+      - name: Plan
+        run: |
+          terraform plan -no-color -lock-timeout=120s | tee plan.txt
+          {
+            echo "## Terraform plan"
+            echo '```'
+            cat plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

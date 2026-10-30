@@ -1,0 +1,77 @@
+# -----------------------------------------------------------------------------
+# CD: create (apply) or delete (destroy) the real AWS resources.
+# Manual trigger only: Actions → cd → Run workflow → choose apply/destroy.
+# Triggering it after reading the CI plan IS the approval.
+# -----------------------------------------------------------------------------
+name: cd
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What should Terraform do?"
+        type: choice
+        options: [apply, destroy]
+        default: apply
+        required: true
+
+# Same group as ci: never two Terraform runs on the shared state at once.
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: terraform ${{ inputs.action }}
+    runs-on: [self-hosted, macOS]
+    if: github.ref == 'refs/heads/main' # only deploy code that is on main
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Add Homebrew to PATH
+        run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+
+      - name: Init
+        run: terraform init
+
+      # -auto-approve: nobody is at a keyboard to type "yes". The plan is still
+      # printed in the log before anything changes.
+      - name: Apply
+        if: inputs.action == 'apply'
+        run: terraform apply -auto-approve -lock-timeout=120s
+
+      - name: Destroy
+        if: inputs.action == 'destroy'
+        run: terraform destroy -auto-approve -lock-timeout=120s
+
+      - name: Show outputs
+        if: inputs.action == 'apply'
+        run: |
+          terraform output
+          {
+            echo "## Outputs"
+            echo '```'
+            terraform output -no-color
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm nothing is left
+        if: inputs.action == 'destroy'
+        run: |
+          count=$(terraform state list | wc -l | tr -d ' ')
+          echo "Resources left in state: $count"
+          echo "Resources left in state: **$count**" >> "$GITHUB_STEP_SUMMARY"

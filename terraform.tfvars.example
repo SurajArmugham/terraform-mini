@@ -1,0 +1,11 @@
+# Optional overrides. Copy to terraform.tfvars (git-ignored) and edit:
+#   cp terraform.tfvars.example terraform.tfvars
+# Every value below is already the default in variables.tf, so this file
+# is only needed if you want something different.
+
+region              = "eu-north-1"
+aws_profile         = "tf-mini"
+project_name        = "terraform-mini"
+instance_type       = "t3.micro"
+availability_zone   = "eu-north-1a"
+ssh_public_key_path = "~/.ssh/tf-mini-ec2.pub"
